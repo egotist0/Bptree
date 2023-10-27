@@ -1,42 +1,12 @@
 
-  
 
-#  CS 4420/6422 Lab 3: B+-Tree
 
-  
+#  B+-Tree
 
-**Assigned: 09/28/2020**
 
-  
-
-**Due: 10/19/2020 11:59 PM EDT**
-
-  
-  
-
-In the lab assignments for CS4420/6422, you will implement an end-to-end toy database management system codenamed BuzzDB. All the labs are written in C++17. We recommend using an IDE for the labs (e.g., [CLion](https://www.jetbrains.com/clion/), [Eclipse](http://www.eclipse.org/cdt/), [VSCode](https://code.visualstudio.com/)).
-
-  
-
-For the third lab, you will implement the B+Tree data structure. We have provided you with a set of unimplemented functions. You will need to fill in these functions. We will grade your code by running a set of system tests written using [Google Test](https://github.com/google/googletest)). We have provided a set of unit tests that you may find useful in verifying that your code works.
-
-  
-
-We **strongly recommend** that you start as early as possible on this lab. It requires you to write a fair amount of code!
-
-  
+An end-to-end toy database management system code named BuzzDB. All the code are written in C++17. 
 
 ##  Environment Setup
-
-  
-
-**Start by downloading the code for lab 3 from Canvas.**
-
-  
-
-We will be using a Linux-based Operating System (OS) for the programming assignments. **Make sure you use Ubuntu OS (version 18.04) for running your code.** We will be testing your code on this version of the OS. If you do not have native access to this OS, you should create a virtual machine (VM) instance on [VirtualBox](https://www.virtualbox.org/wiki/Downloads). Follow the instructions given [here](https://linuxhint.com/install_ubuntu_18-04_virtualbox/) to set up the VM.
-
-  
 
 Here's a list of software dependencies that you will need to install in the OS.
 
@@ -141,7 +111,7 @@ In addition to these functions, we have also provided the skeleton code for stru
 - `LeafNode` - This structure should be used to represent the *leaf* nodes of the tree.
 
  Note that `InnerNode` and `LeafNode` inherit members from the base `Node` object.
- 
+
  Following are some of the important members from `InnerNode` and `LeafNode` that you will need to implement:
   - `static constexpr uint32_t kCapacity` - The capacity of a node.
   - `std::pair<uint32_t, bool> lower_bound(const KeyT &key)` - Get the index of the first key that is not less than than a provided key.
@@ -187,46 +157,6 @@ This is a rough outline of the steps you need to follow to implement the above m
     (note that `erase` becomes lot easier in our case because we allow under full pages)
 
  
- 
+
  * Capacity - Here, you will implement the logic to compute the capacity of a given node.
 
-##  Logistics
-
-  
-
-You must submit your code (see below) as well as an one-page writeup (in `REPORT.md`) describing your solution. In the writeup, mention 1) the design decisions you made, and 2) the missing components in your code. We will award partial credits based on this writeup (if you are unable to finish the implementation before the due date or if it fails any test cases).
-
-  
-
-###  Collaboration
-
-  
-
-This is an individual assignment. No collaboration is allowed.
-
-  
-
-###  Submitting your assignment
-
-You should submit your code on Gradescope. We have set up an autograder that will test your implementation. You are allowed to make multiple submissions and we will use the latest submission to grade your lab.
-
-  
-
-```
-
-bash submit.sh <name>
-
-```
-
-  
-
-***Important***
-
-Do not add additional files to the zip file, use the script above.
-
-  
-
-###  Grading
-
-95% of your grade will be based on whether or not your code passes the autograder test suite. 5% is for code quality. We will award partial marks for submissions that fail the autograder test suite (based on the writeup).
-# Bptree
