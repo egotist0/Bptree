@@ -1,0 +1,186 @@
+  void insert(const KeyT &key, const ValueT &value) {
+    bool isInserted = false;
+
+    if (this->isEmpty) {
+      /// intialize root node
+      this->root = 0;
+      this->next_page_id = 1;
+      this->isEmpty = false;
+    }
+
+    auto current_node_page_id = *this->root;
+
+    while (!isInserted) {
+      auto &current_page =
+          this->buffer_manager.fix_page(current_node_page_id, true);
+      auto current_node = reinterpret_cast<Node *>(current_page.get_data());
+
+      if (current_node->is_leaf()) {
+        const auto &leaf_node = reinterpret_cast<LeafNode *>(current_node);
+        /// check whether there are any empty slots in the leaf node
+        if (leaf_node->count < leaf_node->kCapacity) {
+          leaf_node->insert(key, value);
+          this->buffer_manager.unfix_page(current_page, true);
+          isInserted = true;
+          return;
+        }
+
+        /// no empty slot, need to create a new leaf
+        auto new_leaf_page_id = this->next_page_id;
+        this->next_page_id++;
+        auto &new_leaf_page =
+            this->buffer_manager.fix_page(new_leaf_page_id, true);
+        KeyT separator_key = leaf_node->split(
+            reinterpret_cast<std::byte *>(new_leaf_page.get_data()));
+        auto new_node = reinterpret_cast<Node *>(new_leaf_page.get_data());
+        auto new_leaf_node = reinterpret_cast<LeafNode *>(new_node);
+
+        /// add new key
+        /// if separator_key is not lower than key
+        /// add to lhs, otherwise add to rhs
+        if (!ComparatorT()(separator_key, key))
+          leaf_node->insert(key, value);
+        else
+          new_leaf_node->insert(key, value);
+
+        /// check if current node has a parent or not
+        if (!leaf_node->parentPageId) {
+          /// root has new page id
+          this->root = this->next_page_id;
+          this->next_page_id++;
+          auto &new_root_node_page =
+              this->buffer_manager.fix_page(*this->root, true);
+          auto new_inner_root_node =
+              reinterpret_cast<Node *>(new_root_node_page.get_data());
+          auto new_root_node =
+              reinterpret_cast<InnerNode *>(new_inner_root_node);
+
+          rootLevel++;
+          new_root_node->level = rootLevel;
+          /// add first key
+          new_root_node->keys[0] = separator_key;
+          new_root_node->children[0] = current_node_page_id;
+          new_root_node->children[1] = new_leaf_page_id;
+          /// increase children number
+          new_root_node->count += 2;
+          /// set parent page id for both leaf nodes
+          leaf_node->parentPageId = *this->root;
+          new_leaf_node->parentPageId = *this->root;
+
+          this->buffer_manager.unfix_page(new_leaf_page, true);
+          this->buffer_manager.unfix_page(new_root_node_page, true);
+        } else {
+          /// add separator_key into existing parent node
+          auto &parent_node_page =
+              this->buffer_manager.fix_page(*leaf_node->parentPageId, true);
+          auto parent_node =
+              reinterpret_cast<Node *>(parent_node_page.get_data());
+          const auto &parent_inner_node =
+              reinterpret_cast<InnerNode *>(parent_node);
+          std::optional<uint64_t> leftNode;
+          if (leaf_node->values[leaf_node->count - 1] <
+              new_leaf_node->values[0])
+            leftNode = current_node_page_id;
+
+          parent_inner_node->insert(separator_key, new_leaf_page_id, leftNode);
+          new_leaf_node->parentPageId = *leaf_node->parentPageId;
+          this->buffer_manager.unfix_page(parent_node_page, true);
+        }
+        this->buffer_manager.unfix_page(current_page, true);
+        isInserted = true;
+        return;
+      }
+
+      /// inner node
+      auto inner_node = reinterpret_cast<InnerNode *>(current_node);
+
+      if (inner_node->count == (inner_node->kCapacity + 1)) {
+        /// create new inner node (current inner node is full)
+        auto new_inner_node_page_id = this->next_page_id;
+        this->next_page_id++;
+        auto &new_inner_node_page =
+            this->buffer_manager.fix_page(new_inner_node_page_id, true);
+        KeyT separator_key = inner_node->split(
+            reinterpret_cast<std::byte *>(new_inner_node_page.get_data()));
+        const auto &new_node =
+            reinterpret_cast<Node *>(new_inner_node_page.get_data());
+        const auto &new_inner_node = reinterpret_cast<InnerNode *>(new_node);
+        new_inner_node->level = inner_node->level;
+
+        /// set the new parent id of the children of the new inner node
+        for (int i = 0; i < new_inner_node->count; i++) {
+          auto &child =
+              this->buffer_manager.fix_page(new_inner_node->children[i], true);
+          auto child_node = reinterpret_cast<Node *>(child.get_data());
+          auto child_inner_node = reinterpret_cast<InnerNode *>(child_node);
+          child_inner_node->parentPageId = new_inner_node_page_id;
+        }
+        /// check if current inner node has a parent
+        if (!inner_node->parentPageId) {
+          /// root has new page id
+          this->root = this->next_page_id;
+          this->next_page_id++;
+          auto &new_root_node_page =
+              this->buffer_manager.fix_page(*this->root, true);
+          auto new_root_node =
+              reinterpret_cast<Node *>(new_root_node_page.get_data());
+          auto new_root_inner_node =
+              reinterpret_cast<InnerNode *>(new_root_node);
+          /// increase level by 1
+          rootLevel += 1;
+          new_root_inner_node->level = rootLevel;
+          new_root_inner_node->keys[0] = separator_key;
+          new_root_inner_node->children[0] = current_node_page_id;
+          new_root_inner_node->children[1] = new_inner_node_page_id;
+          new_root_inner_node->count += 2;
+
+          /// set parent page id for both inner nodes
+          inner_node->parentPageId = *this->root;
+          new_inner_node->parentPageId = *this->root;
+
+          this->buffer_manager.unfix_page(new_root_node_page, true);
+
+          /// move to next node
+          auto [index, isFound] = new_root_inner_node->lower_bound(key);
+          if (isFound)
+            current_node_page_id = new_root_inner_node->children[index];
+          else
+            current_node_page_id =
+                new_root_inner_node->children[new_root_inner_node->count - 1];
+
+        } else {
+          /// get the parent node of the current node
+          auto &parent_node_page =
+              this->buffer_manager.fix_page(*inner_node->parentPageId, true);
+          const auto &parent_node =
+              reinterpret_cast<Node *>(parent_node_page.get_data());
+          const auto &parent_inner_node =
+              reinterpret_cast<InnerNode *>(parent_node);
+          std::optional<uint64_t> leftNode;
+          parent_inner_node->insert(separator_key, new_inner_node_page_id,
+                                    leftNode);
+          new_inner_node->parentPageId = *inner_node->parentPageId;
+          /// move to next node
+          auto [index, isFound] = parent_inner_node->lower_bound(key);
+          if (isFound)
+            current_node_page_id = parent_inner_node->children[index];
+          else
+            current_node_page_id =
+                parent_inner_node->children[parent_inner_node->count - 1];
+          this->buffer_manager.unfix_page(parent_node_page, true);
+        }
+
+        this->buffer_manager.unfix_page(new_inner_node_page, true);
+      } else {
+        /// move to next node
+        /// if key is greater than any of the keys in the inner node
+        /// go to last children
+        auto [index, isFound] = inner_node->lower_bound(key);
+        if (isFound)
+          current_node_page_id = inner_node->children[index];
+        else
+          current_node_page_id = inner_node->children[inner_node->count - 1];
+      }
+      this->buffer_manager.unfix_page(current_page, true);
+    }
+  }
